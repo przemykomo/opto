@@ -9,9 +9,10 @@
 use esp_hal::{
     clock::CpuClock,
     delay::Delay,
-    gpio::{InputConfig, OutputConfig, Pull},
+    gpio::{InputConfig, Level, OutputConfig, Pull},
     main, peripherals,
-    time::Duration,
+    rmt::{PulseCode, Rmt, TxChannelConfig, TxChannelCreator},
+    time::{Duration, Rate},
 };
 use esp_println::println;
 
@@ -29,26 +30,10 @@ fn main() -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
-    let mut row0 = esp_hal::gpio::Output::new(
-        peripherals.GPIO0,
-        esp_hal::gpio::Level::Low,
-        OutputConfig::default(),
-    );
-    let mut row1 = esp_hal::gpio::Output::new(
-        peripherals.GPIO1,
-        esp_hal::gpio::Level::Low,
-        OutputConfig::default(),
-    );
-    let mut row2 = esp_hal::gpio::Output::new(
-        peripherals.GPIO2,
-        esp_hal::gpio::Level::Low,
-        OutputConfig::default(),
-    );
-    let mut row3 = esp_hal::gpio::Output::new(
-        peripherals.GPIO3,
-        esp_hal::gpio::Level::Low,
-        OutputConfig::default(),
-    );
+    let row0 = esp_hal::gpio::Output::new(peripherals.GPIO0, Level::Low, OutputConfig::default());
+    let row1 = esp_hal::gpio::Output::new(peripherals.GPIO1, Level::Low, OutputConfig::default());
+    let row2 = esp_hal::gpio::Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
+    let row3 = esp_hal::gpio::Output::new(peripherals.GPIO3, Level::Low, OutputConfig::default());
 
     let col0 = esp_hal::gpio::Input::new(
         peripherals.GPIO5,
@@ -68,6 +53,16 @@ fn main() -> ! {
     //     peripherals.GPIO8,
     //     InputConfig::default().with_pull(Pull::Down),
     // );
+
+    let freq = Rate::from_mhz(80);
+    let rmt = Rmt::new(peripherals.RMT, freq).unwrap();
+    let mut channel = rmt
+        .channel0
+        .configure_tx(
+            peripherals.GPIO20,
+            TxChannelConfig::default().with_clk_divider(255),
+        )
+        .unwrap();
 
     let mut rows = [row0, row1, row2, row3];
     let cols = [col0, col1, col2 /*, col3*/];
@@ -92,6 +87,18 @@ fn main() -> ! {
                     if input {
                         let char = chars[i][j];
                         println!("{char} clicked!");
+
+                        let data = i * 3 + j;
+                        let data = [
+                            PulseCode::new((data & 0b0001 != 0).into(), 50, Level::Low, 50),
+                            PulseCode::new((data & 0b0010 != 0).into(), 50, Level::Low, 50),
+                            PulseCode::new((data & 0b0100 != 0).into(), 50, Level::Low, 50),
+                            PulseCode::new((data & 0b1000 != 0).into(), 50, Level::Low, 50),
+                            PulseCode::end_marker(),
+                        ];
+
+                        let transaction = channel.transmit(&data).unwrap();
+                        channel = transaction.wait().unwrap();
                     }
                 }
             }
