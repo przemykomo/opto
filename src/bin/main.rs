@@ -71,6 +71,13 @@ fn main() -> ! {
 
     let mut rows = [row0, row1, row2, row3];
     let cols = [col0, col1, col2 /*, col3*/];
+    let mut state: [[bool; 3]; 4] = [[false; 3]; 4];
+    let chars = [
+        ['1', '2', '3'],
+        ['4', '5', '6'],
+        ['7', '8', '9'],
+        ['*', '0', '#'],
+    ];
 
     let delay = Delay::new();
 
@@ -78,9 +85,14 @@ fn main() -> ! {
         for (i, row) in rows.iter_mut().enumerate() {
             row.set_high();
             delay.delay_millis(10);
-            for (j, col) in cols.iter().enumerate() {
-                if col.is_high() {
-                    println!("Row: {i}, col: {j}");
+            for (j, input) in cols.iter().enumerate() {
+                let input = input.is_high();
+                if state[i][j] != input {
+                    state[i][j] = input;
+                    if input {
+                        let char = chars[i][j];
+                        println!("{char} clicked!");
+                    }
                 }
             }
             row.set_low();
